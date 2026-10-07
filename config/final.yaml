@@ -1,0 +1,26 @@
+study_id: cross-layer-v2x-conservative-official
+campaign_id: cross_layer_v2x_final
+paths:
+  dataset_dir: data/processed/study
+  aligned_predictions: data/processed/study/model_predictions_vehicle_frame.parquet
+  official_candidates: data/processed/study/official_car_iou_candidates.parquet
+  measured_traces: data/processed/see_v2x_capacity_lower.parquet
+  output_dir: results/reproduction
+campaign:
+  frame_interval_ms: 100.0
+  maximum_delay_ms: 500.0
+  background_streams: [1, 2, 4, 8]
+  repetitions: 3
+  fairness_floor: 0.35
+  critical_risk_threshold: 0.60
+  match_radius_m: 3.0
+  controllers:
+    - proportional_fair_fifo
+    - earliest_deadline_first
+    - lyapunov_dpp
+    - where2comm_object_proxy
+    - codefilling_object_proxy
+    - safeslice_paper_spec_projection
+    - proposed_no_radio
+    - proposed_no_fairness
+    - proposed

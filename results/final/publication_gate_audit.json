@@ -1,0 +1,31 @@
+{
+  "status": "METHOD_GATES_PASS_DOCUMENTARY_ACTIONS_REMAIN",
+  "artifacts": {
+    "DAIR-V2X": {
+      "commit": "c885c54af0c34bc515fa9ca8b5e8fda76a15462c",
+      "official_metric_core": "external/DAIR-V2X/v2x/v2x_utils/eval_utils.py"
+    },
+    "DAIR-V2X-Seq": {
+      "commit": "8a5b4f82da5ab5c6eeacbf961aafbf2c883f437c"
+    },
+    "SEE-V2X": {
+      "commit": "daba452da8c0683d68a63a858e1c861494c59efd"
+    },
+    "SafeSlice": {
+      "commit": null,
+      "tracked_source_files": 0,
+      "status": "UPSTREAM_REPOSITORY_EMPTY_NO_OFFICIAL_CODE_AVAILABLE"
+    }
+  },
+  "gates": {
+    "official_static_perception_metric": "PASS_CLASS_ORIENTED_OFFICIAL_CORE",
+    "official_controller_level_metric": "PASS_IOU_AP_IN_REPLAY",
+    "dataset_license": "DOCUMENTARY_PERMISSION_REQUIRED",
+    "capacity_validation": "PASS_PROSPECTIVE_LOWER_SCI_CQR",
+    "scenario_groups": "PASS_39_PERCEPTION_16_SCI",
+    "computational_overhead": "PASS_EMPIRICAL_NOT_WCET",
+    "external_baselines": "PF_EDF_LYAPUNOV_DPP_PLUS_QUALIFIED_WHERE2COMM_CODEFILLING_AND_SAFESLICE_PROXIES",
+    "limitations_reproducibility": "DOCUMENTED"
+  },
+  "claim_boundary": "No physical-radio, WCET, or official learned-baseline-equivalence claim. Dataset publication permission remains documentary work."
+}

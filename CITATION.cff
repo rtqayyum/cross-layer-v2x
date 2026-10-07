@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this artifact, cite the associated manuscript and the V2X-Seq and SEE-V2X dataset papers listed in README.md."
+title: "Cross-Layer V2X Cooperative Perception Scheduling: Reproducibility Artifact"
+type: software
+version: 1.0.0
+date-released: 2026-10-07
+repository-code: "https://github.com/rtqayyum/cross-layer-v2x-reproducibility"
+license: "LicenseRef-Proprietary"
+authors:
+  - name: "Authors withheld during review"
+

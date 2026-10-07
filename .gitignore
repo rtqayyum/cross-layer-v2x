@@ -1,0 +1,22 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.idea/
+.vscode/
+
+# Official datasets and external repositories are downloaded by each user.
+data/raw/**
+data/interim/**
+data/processed/**
+external/**
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!external/.gitkeep
+
+# Locally reproduced outputs; the reviewed frozen outputs are in results/final.
+results/reproduction/
+

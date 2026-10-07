@@ -1,0 +1,13 @@
+{
+  "status": "PASS_EMPIRICAL_TIMING_ASSURANCE",
+  "deadline_ms": 100.0,
+  "controllers": 9,
+  "total_decisions": 705456,
+  "minimum_margin_ms": 99.245375,
+  "host": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "processor": "arm"
+  },
+  "claim_boundary": "Repeated wall/CPU timing and a zero-exceedance binomial upper bound; this is not static WCET certification or a real-time OS guarantee."
+}

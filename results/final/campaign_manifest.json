@@ -1,0 +1,14 @@
+{
+  "status": "COMPLETE",
+  "campaign_id": "cross_layer_v2x_final",
+  "runs": 4212,
+  "sequences": 39,
+  "network_traces": 48,
+  "held_out_capacity_groups": 16,
+  "oracle_full_recall": 0.5825172384270388,
+  "output": "results/final/run_summaries.parquet",
+  "application_provenance": "MEASURED_ALIGNED_PERCEPTION_OUTPUT",
+  "network_provenance": "MEASURED_SEE_V2X_CROSSFIT_CAPACITY_REPLAY",
+  "physical_radio_claim": false,
+  "synthetic_application_rows": 0
+}

@@ -1,0 +1,10 @@
+controller_id,decisions,deadline_ms,wall_time_run_mean_ms,wall_time_observed_max_ms,cpu_time_run_mean_ms,cpu_time_observed_max_ms,minimum_observed_margin_ms,runs_with_any_deadline_exceedance,zero_exceedance_probability_upper_95,complexity,empirical_only
+codefilling_object_proxy,78384,100.0,0.3194263349453514,0.574125,0.31825374246381366,0.573,99.425875,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+earliest_deadline_first,78384,100.0,0.05320153618385821,0.180583,0.0525528455101362,0.155,99.819417,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+lyapunov_dpp,78384,100.0,0.16267189864251852,0.293292,0.16179558818947873,0.288,99.706708,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+proportional_fair_fifo,78384,100.0,0.049693258999845925,0.105083,0.04905695583181058,0.096,99.894917,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+proposed,78384,100.0,0.15542768221869901,0.754625,0.1545437201657706,0.43,99.245375,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+proposed_no_fairness,78384,100.0,0.15571167324337046,0.279625,0.15483927876841078,0.279,99.720375,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+proposed_no_radio,78384,100.0,0.15623083978704239,0.28375,0.15534529467419841,0.278,99.71625,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+safeslice_paper_spec_projection,78384,100.0,0.1517548170437806,0.273666,0.1508958765544639,0.268,99.726334,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True
+where2comm_object_proxy,78384,100.0,0.15226192264447966,0.279208,0.15139904824690426,0.279,99.720792,0,3.821794024072567e-05,"O(K log K), K <= 3N object-mode candidates",True

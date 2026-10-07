@@ -1,0 +1,32 @@
+{
+  "status": "PASS_SCI_CAPACITY_VALIDATION",
+  "bound_direction": "LOWER_SERVICE_BOUND",
+  "method": "leave-one-scenario-out Q10 GradientBoostingRegressor plus causal rolling 95% conformal correction; first 20% initializes calibration and each final-80% prediction uses only prior residuals",
+  "mcs_reference": "3GPP TS 38.214 MCS table 1 spectral efficiency",
+  "aligned_evaluation_windows": 249252,
+  "calibration_fraction": 0.2,
+  "conformal_target_coverage": 0.95,
+  "conformal_history_max_windows": 5000,
+  "causal_no_future_leakage": true,
+  "scenarios": 16,
+  "scenario_coverage_pass_count": 16,
+  "scenario_coverage_required": 14,
+  "spearman_rho": 0.7033641231626251,
+  "spearman_p": 0.0,
+  "lower_bound_coverage": 0.9543875274822268,
+  "coverage_acceptance_floor": 0.9,
+  "mae_bps": 533119.6203147669,
+  "capacity_unique_values": 20094,
+  "capacity_quantiles_bps": {
+    "0.01": 0.0,
+    "0.1": 590159.8233731121,
+    "0.5": 1136002.214365397,
+    "0.9": 2070476.4795632306,
+    "0.99": 2080000.0
+  },
+  "application_sha256": "37ea1c74037da45c95f2cc108a6fec42782ed60282232a88a8ebc180018129bb",
+  "sci_sha256": "e1cb1f884b6a1c3205200a556e3d11b8e0fb2b03924a64d6f3551df6bbcc9aec",
+  "output_sha256": "abf742a0a83edb5acbe30d7ca46d745967a696232f36d4a20c6c357e071757e2",
+  "physical_radio_claim": false,
+  "limitations": "Prospectively calibrated trace-level lower service bound, not a 3GPP link-level simulator, WCET proof, or OTA validation."
+}

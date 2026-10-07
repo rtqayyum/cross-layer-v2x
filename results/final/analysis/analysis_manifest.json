@@ -1,0 +1,13 @@
+{
+  "status": "ANALYSIS_COMPLETE",
+  "decision": "DO_NOT_CLAIM_CONSTRAINED_SUPERIORITY",
+  "criteria": {
+    "background_sla_feasible": true,
+    "critical_delivery_superiority": true,
+    "official_ap_noninferiority_margin_0.005": true,
+    "risk_utility_noninferiority_margin_0.005": false
+  },
+  "runs": 4212,
+  "sequences": 39,
+  "physical_radio_claim": false
+}
