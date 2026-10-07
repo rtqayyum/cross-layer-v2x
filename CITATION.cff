@@ -4,8 +4,7 @@ title: "Cross-Layer V2X Cooperative Perception Scheduling: Reproducibility Artif
 type: software
 version: 1.0.0
 date-released: 2026-10-07
-repository-code: "https://github.com/rtqayyum/cross-layer-v2x-reproducibility"
+repository-code: "https://github.com/rtqayyum/cross-layer-v2x"
 license: "LicenseRef-Proprietary"
 authors:
   - name: "Authors withheld during review"
-

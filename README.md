@@ -9,8 +9,8 @@ This repository contains only the final experiment code, frozen result summaries
 The checked-in final results contain 4,212 paired controller runs over 39 real V2X-Seq-SPD sequences and 48 measured SEE-V2X traces. Reviewers can verify file integrity and regenerate every statistical table and Python result plot without downloading the raw datasets:
 
 ```bash
-git clone https://github.com/rtqayyum/cross-layer-v2x-reproducibility.git
-cd cross-layer-v2x-reproducibility
+git clone https://github.com/rtqayyum/cross-layer-v2x.git
+cd cross-layer-v2x
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ./verify_artifact.sh
@@ -147,4 +147,3 @@ When using this repository, also cite the associated manuscript. During anonymou
 ## License and redistribution
 
 See [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md). This repository does not grant redistribution rights for either dataset. No raw V2X-Seq or SEE-V2X content is committed.
-
