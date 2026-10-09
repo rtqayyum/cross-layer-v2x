@@ -51,7 +51,9 @@ class Archive:
 
     def __init__(self, path: Path):
         self.zip = zipfile.ZipFile(path)
-        self.names = self.zip.namelist()
+        # Skip macOS archive debris (__MACOSX/, ._ AppleDouble files).
+        self.names = [n for n in self.zip.namelist()
+                      if "__MACOSX/" not in n and not n.rsplit("/", 1)[-1].startswith("._")]
         self.index: dict[str, dict[str, str]] = {}
         for name in self.names:
             if name.endswith(".json"):

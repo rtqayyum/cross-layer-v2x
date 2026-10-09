@@ -30,6 +30,12 @@ import pandas as pd
 DIGITS = re.compile(r"\d+")
 
 
+def is_metadata(name: str) -> bool:
+    """macOS archive debris (__MACOSX/, ._ AppleDouble files, .DS_Store)."""
+    base = name.rsplit("/", 1)[-1]
+    return "__MACOSX/" in name or base.startswith("._") or base == ".DS_Store"
+
+
 def pattern(name: str) -> str:
     """Collapse numeric path components so per-frame files group together."""
     return DIGITS.sub("#", name)
@@ -63,7 +69,7 @@ def summarize_numeric(series: pd.Series) -> dict:
 def inspect_v2x_seq(path: Path) -> dict:
     report: dict = {"archive": path.name}
     with zipfile.ZipFile(path) as zipped:
-        names = zipped.namelist()
+        names = [n for n in zipped.namelist() if not is_metadata(n)]
         counts = collections.Counter(pattern(n) for n in names if not n.endswith("/"))
         report["member_patterns"] = dict(counts.most_common(80))
         jsons = [n for n in names if n.endswith(".json")]
@@ -83,7 +89,13 @@ def inspect_v2x_seq(path: Path) -> dict:
         report["json_directories"] = samples
 
         # Value distributions that decide the method design (no raw rows).
-        info = {n: json.loads(zipped.read(n)) for n in jsons if n.endswith("data_info.json")}
+        info = {}
+        for n in jsons:
+            if n.endswith("data_info.json"):
+                try:
+                    info[n] = json.loads(zipped.read(n))
+                except ValueError as error:
+                    report.setdefault("unreadable_json", []).append(f"{n}: {error}")
         report["data_info"] = {}
         for name, rows in info.items():
             frame = pd.DataFrame(rows)
@@ -108,7 +120,10 @@ def inspect_v2x_seq(path: Path) -> dict:
             per_frame = []
             subdirs = collections.Counter(pattern(str(Path(n).parent)) for n in members)
             for name in members[:4000]:
-                objects = json.loads(zipped.read(name))
+                try:
+                    objects = json.loads(zipped.read(name))
+                except ValueError:
+                    continue
                 if isinstance(objects, dict):
                     objects = objects.get("objects", [objects])
                 per_frame.append(len(objects))
@@ -146,7 +161,7 @@ def inspect_see_v2x(path: Path, max_csv: int = 400) -> dict:
     seen = 0
     with tarfile.open(path, "r:*") as archive:
         for member in archive:
-            if not member.isfile():
+            if not member.isfile() or is_metadata(member.name):
                 continue
             patterns[pattern(member.name)] += 1
             if not member.name.endswith(".csv") or seen >= max_csv:

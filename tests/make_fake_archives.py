@@ -66,6 +66,9 @@ def write_v2x_seq(path: Path, sequences: int = 3) -> None:
     with zipfile.ZipFile(path, "w") as z:
         for name, value in files.items():
             z.writestr(name, json.dumps(value))
+        # macOS archive debris, as in zips created with Finder.
+        for side in ("cooperative", "infrastructure-side", "vehicle-side"):
+            z.writestr(f"__MACOSX/{root}/{side}/._data_info.json", b"\x00\x05\x16\x07Mac OS X")
 
 
 def write_see_v2x(path: Path) -> None:
@@ -99,6 +102,7 @@ def write_see_v2x(path: Path) -> None:
                                     f"{int(rng.random() < 0.3)}")
                 add(f"{base}/rx_rsu_tx_{ue}_perception.csv", "\n".join(rows) + "\n")
             add(f"{base}/sci.csv", "\n".join(sci_rows) + "\n")
+            add(f"{base}/._sci.csv", "\x00\x05\x16\x07")
 
 
 if __name__ == "__main__":

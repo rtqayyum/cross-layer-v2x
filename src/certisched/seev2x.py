@@ -128,6 +128,8 @@ def load(archive: Path, cfg: SeeV2XConfig = SeeV2XConfig(), apps=("perception",)
         for member in tar:
             if not member.isfile() or not member.name.endswith(".csv"):
                 continue
+            if "__MACOSX/" in member.name or Path(member.name).name.startswith("._"):
+                continue
             scen = SCENARIO.search(member.name)
             if not scen:
                 continue
