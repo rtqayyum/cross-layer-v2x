@@ -3,8 +3,8 @@
 Service model (stated in the paper):
 * Window k of the measured link has gross served rate r_k (bytes/ms), a
   measured per-packet access-latency distribution and an erasure rate p_k.
-* At each decision the RSU enqueues CPM packets.  The radio serves strict
-  priority classes (1 = scheduler-marked, 2 = RSU background, 3 = low) as a
+* At each decision the RSU enqueues CPM segments.  The radio serves strict
+  priority classes 1-4 (class 3 = the RSU's background traffic) as a
   fluid at rate r_k from the window start; a packet completes when its last
   byte is served, then arrives after an access latency drawn from the
   window's measured distribution.  Packets unfinished at the window end are
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .controllers import Context, Policy, decide
-from .messages import CPM_HEADER_BYTES, Mode, mode_bytes, transmitted_state
+from .messages import CPM_HEADER_BYTES, Mode, delivery_probability, mode_bytes, transmitted_state
 from .metrics import average_precision, frame_ap_records, fuse
 from .scene import SceneConfig, annotate
 
@@ -32,6 +32,7 @@ class ReplayConfig:
     interval_ms: float = 100.0
     processing_ms: float = 20.0
     deadline_ms: float = 100.0          # freshness requirement from capture
+    segment_objects: int = 10           # max objects per CPM segment
     background_target: float = 0.95     # rho: required background delivery ratio
     match_distance_m: float = 2.0
     eval_radius_m: float = 80.0
@@ -55,13 +56,22 @@ def taus(cfg: ReplayConfig) -> dict:
     return {"crit": tau, "norm": tau, "tot": cfg.interval_ms}
 
 
-def _packets(decision):
-    """Group a decision into CPM packets: (priority, copy, [(obj, mode)])."""
+def _packets(decision, segment_objects: int):
+    """Group a decision into CPM segments: (priority, copy, [(obj, mode)]).
+
+    Objects keep the policy's order inside a priority class and are cut into
+    segments of at most `segment_objects` (ETSI CPM segmentation).  Repetition
+    copies form their own segments after the primary ones of that class.
+    """
     groups: dict[tuple[int, int], list] = {}
     for obj, mode, prio in decision:
         for copy in range(mode.copies):
             groups.setdefault((prio, copy), []).append((obj, mode))
-    return [(prio, copy, items) for (prio, copy), items in sorted(groups.items())]
+    out = []
+    for (prio, copy), items in sorted(groups.items()):
+        for i in range(0, len(items), segment_objects):
+            out.append((prio, copy, items[i:i + segment_objects]))
+    return out
 
 
 def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
@@ -80,7 +90,7 @@ def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
     z = 0.0
     t0 = seq["epochs"][0]["t_ms"] if seq["epochs"] else 0.0
     ego = seq["ego"]
-    stats = {"crit_tx": 0, "crit_ontime": 0, "crit_service_miss": 0, "crit_erased": 0,
+    stats = {"cert_tx": 0, "cert_service_miss": 0, "crit_tx": 0, "crit_ontime": 0, "crit_service_miss": 0, "crit_erased": 0,
              "norm_tx": 0, "norm_ontime": 0, "bytes": 0.0, "bg_offered": 0.0, "bg_served": 0.0,
              "z_sum": 0.0, "decisions": 0, "decision_ms": [], "over_admitted": 0}
     for k, epoch in enumerate(seq["epochs"]):
@@ -104,9 +114,8 @@ def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
         horizon = cfg.interval_ms
         served = 0.0                       # bytes served so far in this window
         bg = float(win.get("bg_bytes", 0.0))
-        packets = _packets(decision)
-        ordered = ([p for p in packets if p[0] == 1] + [(2, 0, None)]
-                   + [p for p in packets if p[0] == 3])
+        packets = _packets(decision, cfg.segment_objects)
+        ordered = sorted(packets + [(3, 0, None)], key=lambda p: (p[0], p[1]))
         bg_served = 0.0
         outcome: dict[str, dict] = {}      # per object: any copy on time / delivered
         for prio, copy, items in ordered:
@@ -116,21 +125,25 @@ def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
                 continue
             size = CPM_HEADER_BYTES + sum(m.bytes_per_object for _, m in items)
             served += size
-            stats["bytes"] += size
             done = served / rate if rate > 0 else np.inf
             completed = done <= horizon
+            stats["bytes"] += size if completed else 0.0
             latency = latency_sample(win, unit(run_key, k, prio, copy, "lat"))
             erased = unit(run_key, k, prio, copy, "erase") < float(win["loss"])
             in_time = completed and (done + latency) <= tau["crit"]
             for obj, mode in items:
-                rec = outcome.setdefault(obj["track_id"], {"tier": obj["tier"], "served_in_time": False,
-                                                           "on_time": False})
+                rec = outcome.setdefault(obj["track_id"], {
+                    "tier": obj["tier"], "served_in_time": False, "on_time": False,
+                    "certified": prio == 1 and policy.kind == "certisched" and policy.tiers})
                 rec["served_in_time"] |= in_time
                 rec["on_time"] |= in_time and not erased
                 if completed and not erased:
                     deliveries.setdefault(obj["track_id"], []).append(
                         (decision_ms + done + latency, transmitted_state(obj, mode)))
         for rec in outcome.values():
+            if rec["certified"]:
+                stats["cert_tx"] += 1
+                stats["cert_service_miss"] += int(not rec["served_in_time"])
             if rec["tier"] == "crit":
                 stats["crit_tx"] += 1
                 stats["crit_service_miss"] += int(not rec["served_in_time"])
@@ -142,7 +155,9 @@ def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
         stats["over_admitted"] += int(served > rate * horizon + 1e-9)
         # RSU-side belief: last transmitted state (no acknowledgement on broadcast).
         for obj, mode, _ in decision:
-            beliefs[obj["track_id"]] = transmitted_state(obj, mode)
+            belief = transmitted_state(obj, mode)
+            belief["delivery_prob"] = delivery_probability(mode, float(win.get("loss_hat", 0.0)))
+            beliefs[obj["track_id"]] = belief
             last_tx[obj["track_id"]] = dict(obj)
         stats["bg_offered"] += bg
         stats["bg_served"] += bg_served
@@ -230,6 +245,8 @@ def summarize(stats: dict, records: list[dict], policy: Policy) -> dict:
         "hidden_aoi_ms": float(np.mean([r["aoi_ms"] for r in aware_hid])) if aware_hid else np.nan,
         "hidden_error_m": float(np.mean([r["error_m"] for r in aware_hid])) if aware_hid else np.nan,
         "crit_tx": stats["crit_tx"],
+        "certified_tx": stats["cert_tx"],
+        "certified_miss_rate": stats["cert_service_miss"] / stats["cert_tx"] if stats["cert_tx"] else np.nan,
         "crit_service_miss_rate": stats["crit_service_miss"] / stats["crit_tx"] if stats["crit_tx"] else np.nan,
         "crit_ontime_rate": stats["crit_ontime"] / stats["crit_tx"] if stats["crit_tx"] else np.nan,
         "norm_ontime_rate": stats["norm_ontime"] / stats["norm_tx"] if stats["norm_tx"] else np.nan,

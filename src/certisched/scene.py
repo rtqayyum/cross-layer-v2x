@@ -27,6 +27,9 @@ class SceneConfig:
     error_scale_m: float = 1.0
     position_weight: float = 0.5   # eta: positional awareness vs box fidelity
     undelivered_error_m: float = 1e6
+    state_expiry_ms: float = 1000.0  # receivers discard object states older than this
+    hidden_floor: float = 0.3        # kappa: value of a hidden object without conflict
+    accel_uncertainty: float = 1.5   # a_max (m/s^2): unmodelled acceleration growth
 
 
 def closest_approach(p_ego, v_ego, p_obj, v_obj, horizon_s: float) -> tuple[float, float]:
@@ -76,14 +79,20 @@ def kinematic_mode_quality(obj: dict) -> float:
 
 
 def receiver_error(obj: dict, belief: dict | None, at_ms: float, cfg: SceneConfig) -> float:
-    """Position error of the receiver's extrapolated estimate at `at_ms` if not updated."""
-    if belief is None:
+    """Position error of the receiver's extrapolated estimate at `at_ms` if not updated.
+
+    A state that will have expired at the receiver by `at_ms` counts as absent.
+    """
+    if belief is None or at_ms - belief["capture_ms"] >= cfg.state_expiry_ms:
         return cfg.undelivered_error_m
     dt = (at_ms - belief["capture_ms"]) / 1000.0
     est = np.array([belief["x"] + belief["vx"] * dt, belief["y"] + belief["vy"] * dt])
     dt_true = (at_ms - obj["capture_ms"]) / 1000.0
     true = np.array([obj["x"] + obj.get("vx", 0.0) * dt_true, obj["y"] + obj.get("vy", 0.0) * dt_true])
-    return float(np.linalg.norm(est - true))
+    # Known extrapolation error plus the growth an unmodelled acceleration can
+    # cause over the belief's age (0.5 a t^2); the two add in quadrature.
+    growth = 0.5 * cfg.accel_uncertainty * dt ** 2
+    return float(np.hypot(np.linalg.norm(est - true), growth))
 
 
 def annotate(objects: list[dict], ego: dict | None, beliefs: dict, decision_ms: float,
@@ -106,10 +115,12 @@ def annotate(objects: list[dict], ego: dict | None, beliefs: dict, decision_ms: 
         tier = "crit" if critical else "norm"
         obj.update(
             occlusion=float(o), d_min=d_min, t_min=t_min, conflict=conflict, tier=tier,
-            relevance=cfg.base_relevance + (1 - cfg.base_relevance) * float(o) * conflict,
+            relevance=cfg.base_relevance + (1 - cfg.base_relevance) * float(o)
+            * (cfg.hidden_floor + (1 - cfg.hidden_floor) * conflict),
             ego_distance=float(np.hypot(obj["x"] - ego_xy[0], obj["y"] - ego_xy[1])),
             receiver_error=receiver_error(obj, beliefs.get(obj["track_id"]),
                                           decision_ms + deadline_ms[tier], cfg),
+            belief_confidence=float(beliefs.get(obj["track_id"], {}).get("delivery_prob", 0.0)),
             kin_quality=kinematic_mode_quality(obj),
         )
     return objects
@@ -122,7 +133,11 @@ def update_value(obj: dict, mode: Mode, loss_hat: float, cfg: SceneConfig) -> fl
     with h(e) = 1 - exp(-e / eps), q = 1 for box modes and the object-specific
     BEV IoU of the class-prior reconstruction for the kinematic mode.
     """
-    h = 1.0 - np.exp(-obj["receiver_error"] / cfg.error_scale_m)
+    # Broadcast has no acknowledgement: the last transmission reached the
+    # receiver only with probability belief_confidence.
+    has = obj.get("belief_confidence", 0.0)
+    h_known = 1.0 - np.exp(-obj["receiver_error"] / cfg.error_scale_m)
+    h = has * h_known + (1.0 - has)
     quality = 1.0 if mode.sends_box else obj["kin_quality"]
     eta = cfg.position_weight
     return float(obj["relevance"] * h * delivery_probability(mode, loss_hat)
