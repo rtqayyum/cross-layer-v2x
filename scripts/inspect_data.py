@@ -54,7 +54,8 @@ def keys_of(value, depth: int = 0) -> object:
 def summarize_numeric(series: pd.Series) -> dict:
     values = pd.to_numeric(series, errors="coerce").dropna()
     if values.empty:
-        return {"non_numeric": True, "distinct": int(series.nunique())}
+        return {"non_numeric": True, "distinct": int(series.astype(str).nunique()),
+                "types": sorted({type(v).__name__ for v in series.head(200)})}
     return {
         "n": int(len(values)),
         "min": float(values.min()),
@@ -213,14 +214,19 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     report: dict = {"numpy": np.__version__, "pandas": pd.__version__}
-    if args.v2x_seq:
-        report["v2x_seq"] = inspect_v2x_seq(args.v2x_seq)
-    if args.v2x_infra:
-        report["v2x_infra_lidar"] = inspect_infra_lidar(args.v2x_infra)
-    if args.v2x_vehicle:
-        report["v2x_vehicle_lidar"] = inspect_infra_lidar(args.v2x_vehicle)
-    if args.see_v2x:
-        report["see_v2x"] = inspect_see_v2x(args.see_v2x)
+    sections = [("v2x_seq", inspect_v2x_seq, args.v2x_seq),
+                ("v2x_infra_lidar", inspect_infra_lidar, args.v2x_infra),
+                ("v2x_vehicle_lidar", inspect_infra_lidar, args.v2x_vehicle),
+                ("see_v2x", inspect_see_v2x, args.see_v2x)]
+    for key, function, path in sections:
+        if not path:
+            continue
+        try:
+            report[key] = function(path)
+        except Exception as error:  # noqa: BLE001 - keep the rest of the report
+            import traceback
+            report[key] = {"error": repr(error), "traceback": traceback.format_exc()}
+            print(f"section {key} failed: {error!r}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, default=str) + "\n")
     print(f"wrote {args.output}")
