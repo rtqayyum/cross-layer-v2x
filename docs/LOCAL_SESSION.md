@@ -38,7 +38,26 @@ Send back: `results/inspection/data_schema.json`
 For a split infrastructure archive (.zip + .z01), the inspector only needs the
 `.zip`; if it fails, combine first with `zip -s 0 in.zip --out combined.zip`.
 
-## Later steps
+## Step 1 - full CertiSched pipeline (about 1-3 hours on a laptop CPU)
 
-Later steps (full pipeline, results bundle) are added below as the code lands.
+```bash
+git pull
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest tests -q            # must pass before running on data
+./run_v2.sh                                      # uses V2X_SEQ_ARCHIVE and SEE_V2X_ARCHIVE
+```
+
+The run is resumable: if it stops, run `./run_v2.sh` again.  For a quick
+check first, `PYTHONPATH=src .venv/bin/python scripts/run_campaign_v2.py --limit 200`
+after stages 1-2.
+
+If stage 1 or 2 fails, do not edit the method code.  Commit the full error
+text to `results/v2/ERROR.txt` together with `results/inspection/data_schema.json`
+and push, so the loader can be fixed against the real schema.
+
+### Send back (commit and push to `claude/charming-wozniak-jr6k5b`)
+
+Everything in `results/v2/` (CSV, JSON, `macros.tex`, `runs.parquet`).  These
+contain aggregate metrics only.  Do **not** commit `data/processed/`.
+
 Always `git pull` first and follow the newest version of this file.

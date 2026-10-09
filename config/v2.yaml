@@ -1,0 +1,35 @@
+# CertiSched campaign configuration (every parameter reported in the paper).
+replay:
+  interval_ms: 100.0
+  processing_ms: 20.0
+  deadline_ms: 100.0          # freshness requirement from capture -> tau = 80 ms
+  background_target: 0.95     # rho
+  segment_objects: 10
+  match_distance_m: 2.0
+envelope:
+  alpha_crit: 0.05            # certified tier miss target
+  alpha_norm: 0.10
+  gamma: 0.005                # ACI step size
+  residual_window: 2000
+  calibration_fraction: 0.2
+  base_quantile: 0.5
+  alpha_sweep: [0.01, 0.02, 0.05, 0.10, 0.20]
+scene:
+  ego_sensor_range_m: 60.0
+  horizon_s: 5.0
+  conflict_scale_m: 5.0
+  critical_occlusion: 0.5
+  critical_distance_m: 8.0
+  error_scale_m: 1.0
+  state_expiry_ms: 1000.0
+  accel_uncertainty: 1.5
+campaign:
+  primary_setting: outdoor_intersection
+  assignments_primary: 8      # link segments per sequence, outdoor (primary)
+  assignments_secondary: 4    # link segments per sequence, indoor (secondary)
+  seed: 20261009
+  workers: 0                  # 0 = all cores
+  sweeps:
+    v_dpp: [1.0e4, 1.0e5, 1.0e6, 1.0e7]
+    load_factor: [1, 2, 4]    # CPM bytes multiplier (scarcity)
+    alpha_crit: [0.01, 0.02, 0.05, 0.10, 0.20]

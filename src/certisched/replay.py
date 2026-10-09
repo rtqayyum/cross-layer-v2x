@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .controllers import Context, Policy, decide
-from .messages import CPM_HEADER_BYTES, Mode, delivery_probability, mode_bytes, transmitted_state
+from .messages import delivery_probability, transmitted_state
 from .metrics import average_precision, frame_ap_records, fuse
 from .scene import SceneConfig, annotate
 
@@ -90,7 +90,7 @@ def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
     z = 0.0
     t0 = seq["epochs"][0]["t_ms"] if seq["epochs"] else 0.0
     ego = seq["ego"]
-    stats = {"cert_tx": 0, "cert_service_miss": 0, "crit_tx": 0, "crit_ontime": 0, "crit_service_miss": 0, "crit_erased": 0,
+    stats = {"cert_epochs": 0, "cert_epoch_miss": 0, "cert_tx": 0, "cert_service_miss": 0, "crit_tx": 0, "crit_ontime": 0, "crit_service_miss": 0, "crit_erased": 0,
              "norm_tx": 0, "norm_ontime": 0, "bytes": 0.0, "bg_offered": 0.0, "bg_served": 0.0,
              "z_sum": 0.0, "decisions": 0, "decision_ms": [], "over_admitted": 0}
     for k, epoch in enumerate(seq["epochs"]):
@@ -123,7 +123,7 @@ def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
                 bg_served = min(bg, max(0.0, rate * horizon - served))
                 served += bg
                 continue
-            size = CPM_HEADER_BYTES + sum(m.bytes_per_object for _, m in items)
+            size = policy.header + sum(m.bytes_per_object for _, m in items)
             served += size
             done = served / rate if rate > 0 else np.inf
             completed = done <= horizon
@@ -140,6 +140,10 @@ def run_episode(seq: dict, link: dict, policy: Policy, cfg: ReplayConfig,
                 if completed and not erased:
                     deliveries.setdefault(obj["track_id"], []).append(
                         (decision_ms + done + latency, transmitted_state(obj, mode)))
+        certified = [r for r in outcome.values() if r["certified"]]
+        if certified:
+            stats["cert_epochs"] += 1
+            stats["cert_epoch_miss"] += int(any(not r["served_in_time"] for r in certified))
         for rec in outcome.values():
             if rec["certified"]:
                 stats["cert_tx"] += 1
@@ -246,6 +250,9 @@ def summarize(stats: dict, records: list[dict], policy: Policy) -> dict:
         "hidden_error_m": float(np.mean([r["error_m"] for r in aware_hid])) if aware_hid else np.nan,
         "crit_tx": stats["crit_tx"],
         "certified_tx": stats["cert_tx"],
+        "certified_epochs": stats["cert_epochs"],
+        "certified_epoch_misses": stats["cert_epoch_miss"],
+        "certified_misses": stats["cert_service_miss"],
         "certified_miss_rate": stats["cert_service_miss"] / stats["cert_tx"] if stats["cert_tx"] else np.nan,
         "crit_service_miss_rate": stats["crit_service_miss"] / stats["crit_tx"] if stats["crit_tx"] else np.nan,
         "crit_ontime_rate": stats["crit_ontime"] / stats["crit_tx"] if stats["crit_tx"] else np.nan,

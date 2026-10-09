@@ -14,10 +14,9 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .knapsack import solve_exact, solve_greedy
-from .messages import CPM_HEADER_BYTES, MODES, Mode, mode_bytes
+from .messages import MODES, Mode, header_bytes, mode_bytes, resolve_modes
 from .scene import SceneConfig, update_value
 
-BOX = next(m for m in MODES if m.name == "box")
 
 
 @dataclass
@@ -44,14 +43,31 @@ class Policy:
     exact: bool = True
     opportunistic: bool = True    # class-3 best-effort fill with a point forecast
     priority: int = 4             # baselines: 4 = after RSU background (contract-compliant)
-    modes: tuple = MODES
+    alpha_crit: float | None = None  # use the ACI envelope of this alpha (sweep)
+    load_factor: float = 1.0      # CPM bytes multiplier (scarcity sweep)
+
+    @property
+    def modes(self) -> tuple[Mode, ...]:
+        return resolve_modes(self.mode_names, self.load_factor)
+
+    @property
+    def header(self) -> int:
+        return header_bytes(self.load_factor)
+
+    @property
+    def box(self) -> Mode:
+        return resolve_modes(("box",), self.load_factor)[0]
+    mode_names: tuple = tuple(m.name for m in MODES)
     v_dpp: float = 1.0e6         # DPP trade-off parameter V (swept in the paper)
     phy_max_bytes_per_ms: float = 3750.0  # 30 Mbit/s ceiling for infinite bounds
 
 
 def _bound(ctx: Context, policy: Policy, tier: str, tau_ms: float) -> float:
     key = "S" if policy.bound == "oracle" else policy.bound
-    value = float(ctx.env.get(f"{key}_{tier}", np.nan))
+    name = f"{key}_{tier}"
+    if tier == "crit" and key == "aci" and policy.alpha_crit is not None:
+        name = f"aci_crit@{policy.alpha_crit}"
+    value = float(ctx.env.get(name, np.nan))
     if not np.isfinite(value):
         value = 0.0 if np.isnan(value) else policy.phy_max_bytes_per_ms * tau_ms
     return max(0.0, value)
@@ -69,7 +85,7 @@ def _options(objects, policy: Policy, ctx: Context):
     return opts
 
 
-def _solve_with_headers(solve, options, modes, budget, **kwargs):
+def _solve_with_headers(solve, options, modes, budget, header, **kwargs):
     """Solve once without repetition modes (one CPM header) and once with them
     (two headers: primary + repetition packet); keep the better feasible plan."""
     def value(sel):
@@ -77,9 +93,9 @@ def _solve_with_headers(solve, options, modes, budget, **kwargs):
         return sum(lookup[x] for x in sel)
     rep = {k for k, m in enumerate(modes) if m.copies > 1}
     plain = [o for o in options if o[1] not in rep]
-    best = solve(plain, budget - CPM_HEADER_BYTES, **kwargs) if budget > CPM_HEADER_BYTES else []
-    if rep and budget > 2 * CPM_HEADER_BYTES:
-        alt = solve(options, budget - 2 * CPM_HEADER_BYTES, **kwargs)
+    best = solve(plain, budget - header, **kwargs) if budget > header else []
+    if rep and budget > 2 * header:
+        alt = solve(options, budget - 2 * header, **kwargs)
         if value(alt) > value(best):
             best = alt
     return best
@@ -102,12 +118,12 @@ def certisched(ctx: Context, policy: Policy, taus: dict) -> list[tuple[dict, Mod
             # displace background traffic; they are priced at Z_t / V.
             price = ctx.queue_z / policy.v_dpp
             free = max(0.0, float(ctx.env.get("point_tot", 0.0)) - ctx.bg_bytes)
-        chosen = _solve_with_headers(solve, _options(sub, policy, ctx), policy.modes, budget,
+        chosen = _solve_with_headers(solve, _options(sub, policy, ctx), policy.modes, budget, policy.header,
                                      price=price, free_bytes=free)
         for j, k in chosen:
             decision.append((sub[j], policy.modes[k], 1))
         used = sum(mode_bytes(m) for _, m, _ in decision)
-        used += CPM_HEADER_BYTES * (1 + any(m.copies > 1 for _, m, _ in decision)) if decision else 0
+        used += policy.header * (1 + any(m.copies > 1 for _, m, _ in decision)) if decision else 0
     # Class 2: critical objects beyond the certified budget, sent ahead of the
     # background only while the DPP price Z_t / V makes it worthwhile.
     certified = {id(o) for o, _, _ in decision}
@@ -115,15 +131,15 @@ def certisched(ctx: Context, policy: Policy, taus: dict) -> list[tuple[dict, Mod
         extra = [objs[i] for i in crit_idx if id(objs[i]) not in certified]
         point = float(ctx.env.get("point_crit", 0.0))
         budget = (point if np.isfinite(point) else 0.0) - used
-        if extra and budget > CPM_HEADER_BYTES:
+        if extra and budget > policy.header:
             # Drift-plus-penalty: every class-2 byte can displace background when
             # the realized service falls short, so all of them carry Z_t / V.
             price = ctx.queue_z / policy.v_dpp if policy.dpp else 0.0
-            chosen = _solve_with_headers(solve, _options(extra, policy, ctx), policy.modes, budget,
+            chosen = _solve_with_headers(solve, _options(extra, policy, ctx), policy.modes, budget, policy.header,
                                          price=price, free_bytes=0.0)
             for j, k in chosen:
                 decision.append((extra[j], policy.modes[k], 2))
-            used += sum(mode_bytes(policy.modes[k]) for _, k in chosen) + (CPM_HEADER_BYTES if chosen else 0)
+            used += sum(mode_bytes(policy.modes[k]) for _, k in chosen) + (policy.header if chosen else 0)
 
     # Best-effort tier: everything not certified (normal objects and critical
     # objects that did not fit the certified budget).  It is queued at the
@@ -139,7 +155,7 @@ def certisched(ctx: Context, policy: Policy, taus: dict) -> list[tuple[dict, Mod
             budget = _bound(ctx, policy, "norm", taus["norm"]) - used - (ctx.bg_bytes if policy.tiers else 0.0)
             prio = 4 if policy.tiers else 1
         options = _options(rest, policy, ctx)
-        chosen = _solve_with_headers(solve, options, policy.modes, budget)
+        chosen = _solve_with_headers(solve, options, policy.modes, budget, policy.header)
         values = {(o, m): v for o, m, _, v in options}
         planned = sorted(chosen, key=lambda jk: -values[jk] / mode_bytes(policy.modes[jk[1]]))
         for j, k in planned:
@@ -161,8 +177,9 @@ def certisched(ctx: Context, policy: Policy, taus: dict) -> list[tuple[dict, Mod
     return decision
 
 
-def _fill(ranked: list[dict], budget: float, mode: Mode = BOX, prio: int = 3):
-    out, used = [], CPM_HEADER_BYTES
+def _fill(ranked: list[dict], budget: float, policy: Policy):
+    mode, prio = policy.box, policy.priority
+    out, used = [], policy.header
     for obj in ranked:
         b = mode_bytes(mode)
         if used + b > budget:
@@ -178,7 +195,7 @@ def _point_budget(ctx: Context) -> float:
 
 
 def send_all(ctx: Context, policy: Policy, taus: dict):
-    return [(o, BOX, policy.priority) for o in ctx.objects]
+    return [(o, policy.box, policy.priority) for o in ctx.objects]
 
 
 def etsi_cpm(ctx: Context, policy: Policy, taus: dict):
@@ -198,7 +215,7 @@ def etsi_cpm(ctx: Context, policy: Policy, taus: dict):
                 or dt >= (500.0 if vru else 1000.0)):
             included.append((dt, o))
     included.sort(key=lambda item: -item[0])
-    return _fill([o for _, o in included], _point_budget(ctx), prio=policy.priority)
+    return _fill([o for _, o in included], _point_budget(ctx), policy)
 
 
 def etsi_vrm(ctx: Context, policy: Policy, taus: dict):
@@ -208,7 +225,7 @@ def etsi_vrm(ctx: Context, policy: Policy, taus: dict):
         novelty = 1.0 - np.exp(-o["receiver_error"] / eps)
         return o.get("confidence", 1.0) * np.exp(-o["ego_distance"] / 50.0) * novelty
     ranked = sorted(ctx.objects, key=lambda o: -voi(o))
-    return _fill([o for o in ranked if voi(o) > 1e-6], _point_budget(ctx), prio=policy.priority)
+    return _fill([o for o in ranked if voi(o) > 1e-6], _point_budget(ctx), policy)
 
 
 def aoi_maxweight(ctx: Context, policy: Policy, taus: dict):
@@ -218,13 +235,13 @@ def aoi_maxweight(ctx: Context, policy: Policy, taus: dict):
         return 10_000.0 if belief is None else ctx.decision_ms - belief["capture_ms"]
     p = 1.0 - ctx.loss_hat
     ranked = sorted(ctx.objects, key=lambda o: -(p * age(o) * (age(o) + 100.0)))
-    return _fill(ranked, _point_budget(ctx), prio=policy.priority)
+    return _fill(ranked, _point_budget(ctx), policy)
 
 
 def confidence_density(ctx: Context, policy: Policy, taus: dict):
     """Where2comm-style selection: confidence per transmitted byte."""
     ranked = sorted(ctx.objects, key=lambda o: -o.get("confidence", 1.0))
-    return _fill(ranked, _point_budget(ctx), prio=policy.priority)
+    return _fill(ranked, _point_budget(ctx), policy)
 
 
 BASELINES = {
@@ -248,7 +265,7 @@ def default_policies() -> list[Policy]:
         Policy("w/o tiers", "certisched", tiers=False),
         Policy("w/o opportunistic tier", "certisched", opportunistic=False),
         Policy("w/o DPP", "certisched", dpp=False),
-        Policy("box mode only", "certisched", modes=(BOX,)),
+        Policy("box mode only", "certisched", mode_names=("box",)),
         Policy("Oracle service", "certisched", bound="oracle"),
         Policy("ETSI CPM rules", "etsi_cpm"),
         Policy("VoI redundancy mitigation", "etsi_vrm"),

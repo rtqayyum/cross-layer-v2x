@@ -44,6 +44,17 @@ MODES: tuple[Mode, ...] = (
     Mode("box_rep", 60, True, 2, 0.01),
 )
 CPM_HEADER_BYTES = 121
+MODE_BY_NAME = {m.name: m for m in MODES}
+
+
+def resolve_modes(names, load_factor: float = 1.0) -> tuple[Mode, ...]:
+    """Modes by name with every size scaled by `load_factor` (scarcity sweep)."""
+    return tuple(Mode(m.name, int(round(m.bytes_per_object * load_factor)), m.sends_box, m.copies,
+                      m.position_step_m) for m in (MODE_BY_NAME[n] for n in names))
+
+
+def header_bytes(load_factor: float = 1.0) -> int:
+    return int(round(CPM_HEADER_BYTES * load_factor))
 
 
 def mode_bytes(mode: Mode) -> int:
