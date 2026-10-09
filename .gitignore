@@ -20,3 +20,13 @@ external/**
 # Locally reproduced outputs; the reviewed frozen outputs are in results/final.
 results/reproduction/
 
+
+# LaTeX build files
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.synctex.gz

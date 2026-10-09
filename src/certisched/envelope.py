@@ -118,7 +118,9 @@ def aci_lower_bounds(pred: np.ndarray, target: np.ndarray, cfg: EnvelopeConfig,
             bound = np.inf
         else:
             q = _quantile(history, 1.0 - alpha_t)
-            bound = 0.0 if not np.isfinite(q) else max(0.0, pred[t] - q)
+            # q = +inf (too few scores for the level): trivial bound 0;
+            # q = -inf (level below the smallest order statistic): no bound.
+            bound = 0.0 if q == np.inf else (np.inf if q == -np.inf else max(0.0, pred[t] - q))
         bounds[t], alphas[t] = bound, alpha_t
         err = float(target[t] < bound)
         alpha_t = alpha_t + cfg.gamma * (cfg.alpha - err)

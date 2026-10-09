@@ -1,3 +1,34 @@
+# CertiSched: Certified, Risk-Tiered Object Scheduling for Roadside Cooperative Perception
+
+**Current version (v2).** A roadside unit decides every 100 ms which perceived objects to
+send to a connected vehicle in its collective perception message (CPM), at which level of
+detail, over a measured C-V2X sidelink, while its own safety traffic keeps a delivery
+contract.  CertiSched values updates by the error they remove from the vehicle's world
+model (occlusion, path conflict, estimation error), certifies the most critical tier with
+an adaptive-conformal service envelope (distribution-free long-run deadline guarantee),
+prices further critical traffic with a drift-plus-penalty queue, and fills the rest with
+best-effort updates under strict priority.
+
+| Path | Content |
+|---|---|
+| `src/certisched/` | method, baselines, replay, metrics, dataset loaders |
+| `scripts/*_v2.py`, `run_v2.sh` | prepare -> envelopes -> campaign -> analysis |
+| `config/v2.yaml` | every parameter reported in the paper |
+| `tests/` | solver optimality, ACI coverage bound, replay invariants, end-to-end pipeline on fake archives |
+| `paper/` | manuscript (IEEE OJVT); numbers and tables come from `results/v2/` |
+| `docs/LOCAL_SESSION.md` | how to run on the machine that holds the datasets |
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+PYTHONPATH=src .venv/bin/python -m pytest tests -q
+V2X_SEQ_ARCHIVE=/abs/V2X-Seq-SPD.zip SEE_V2X_ARCHIVE=/abs/emulating_applications.tar.gz ./run_v2.sh
+cd paper && latexmk -pdf main.tex
+```
+
+The sections below describe the earlier (v1) artifact, kept for provenance.
+
+---
+
 # Cross-Layer V2X Cooperative Perception Scheduling
 
 Reproducibility artifact for the proposed risk- and freshness-aware cross-layer scheduler for cooperative roadside perception under measured V2X service.
