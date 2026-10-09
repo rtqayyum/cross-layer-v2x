@@ -113,7 +113,7 @@ def test_oracle_service_has_no_service_misses_and_send_all_over_admits():
     link, env, _ = _link_with_envelopes()
     pol = {p.name: p for p in default_policies()}
     oracle = _episode(pol["Oracle service"], link, env)
-    assert oracle["crit_service_miss_rate"] in (0.0,) or np.isnan(oracle["crit_service_miss_rate"])
+    assert oracle["certified_miss_rate"] in (0.0,) or np.isnan(oracle["certified_miss_rate"])
     scarce, scarce_env, _ = _link_with_envelopes(mean_rate=4.0)
     assert _episode(pol["Send all"], scarce, scarce_env)["over_admission_rate"] > 0
 
@@ -124,9 +124,9 @@ def test_certified_service_miss_rate_tracks_alpha():
     misses, total = 0, 0
     for start in range(400, 2800, 100):
         out = _episode(pol["CertiSched"], link, env, start=start, seed=start)
-        if out["crit_tx"]:
-            misses += out["crit_service_miss_rate"] * out["crit_tx"]
-            total += out["crit_tx"]
+        if out["certified_tx"]:
+            misses += out["certified_miss_rate"] * out["certified_tx"]
+            total += out["certified_tx"]
     assert total > 50
     # Service-induced misses of certified critical objects stay near alpha_crit.
     assert misses / total <= alphas["crit"] + 0.05
